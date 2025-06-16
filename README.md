@@ -6,6 +6,9 @@ A Discord bot designed to enhance user interaction with features ranging from mu
 
 ### 💬 Message Commands
 - `give me a cat`: Returns a random cat image (Cat API integration).
+- `*bot-mention* <any message>`: Enables you to communicate with the bot directly (DeepSeek API integration).
+- `league of legends`: Any mention of League of Legends results in a ban. (lol)
+- `go make a mess`: Urges the bot to join your voice channel, and play a random sound from local soundboard.
 
 
 ### 🛠 Slash Commands
@@ -13,7 +16,7 @@ A Discord bot designed to enhance user interaction with features ranging from mu
 - `/vibecheck`: Sends a random "vibe" rating (may result in a 1-minute timeout lottery)
 - `/playsound sound:<name>`: Plays a specific local sound file in a voice channel.
 - `/weather city:<name>`: Fetches weather information using WeatherAPI.
-- `/nasa function:<apod> [date]`: NASA API integration with optional date.
+- `/nasa function:<apod> [date]`: NASA API integration with optional date. Current features: `apod` - Astronomy Picture of the Day, with the description, title and the day
 - `/play url:<Soundcloud URL>`: Streams audio in a voice channel (Lavaplayer integration).
 - `/skip`: Skips the currently playing track.
 - `/queue`: Displays the current music queue.
