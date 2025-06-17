@@ -26,6 +26,7 @@ import java.util.concurrent.TimeUnit;
 
 public class Bot {
     public static void main(String[] args) throws LoginException, InterruptedException {
+        // this token serves as a placeholder and does not work, do not even try
         String token = "MTM4MTcwMjUwOTQxMTgzMjA0OQ.GkHWqs.akBJDgOCoTvEBaG9gQoYkejMRBegqOxJRBSNuI";
         JDA jda = JDABuilder.createDefault(token)
                 .enableIntents(GatewayIntent.MESSAGE_CONTENT)
