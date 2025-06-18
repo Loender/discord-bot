@@ -23,3 +23,5 @@ secrets.properties
 *.idb
 
 *.tmp
+
+playback.json

@@ -2,18 +2,24 @@ package org.example;
 
 import com.sedmelluq.discord.lavaplayer.player.*;
 import com.sedmelluq.discord.lavaplayer.source.AudioSourceManagers;
+import com.sedmelluq.discord.lavaplayer.tools.FriendlyException;
+import com.sedmelluq.discord.lavaplayer.track.AudioPlaylist;
 import com.sedmelluq.discord.lavaplayer.track.AudioTrack;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.JDABuilder;
+import net.dv8tion.jda.api.entities.Guild;
 import net.dv8tion.jda.api.entities.Message;
+import net.dv8tion.jda.api.entities.channel.concrete.VoiceChannel;
 import net.dv8tion.jda.api.entities.channel.middleman.MessageChannel;
 import net.dv8tion.jda.api.events.message.MessageReceivedEvent;
 import net.dv8tion.jda.api.hooks.ListenerAdapter;
 import net.dv8tion.jda.api.interactions.commands.OptionType;
 import net.dv8tion.jda.api.interactions.commands.build.Commands;
+import net.dv8tion.jda.api.managers.AudioManager;
 import net.dv8tion.jda.api.requests.GatewayIntent;
-import org.example.music.LavaAudioPlayerHandler;
+import org.example.music.*;
 import org.example.APIs.*;
+import org.example.music.PlaybackState;
 
 import javax.security.auth.login.LoginException;
 import java.io.FileInputStream;
@@ -23,11 +29,12 @@ import java.nio.charset.StandardCharsets;
 import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.Map;
 
 public class Bot {
+
     public static void main(String[] args) throws LoginException, InterruptedException {
-        // this token serves as a placeholder and does not work, do not even try
-        String token = "MTM4MTcwMjUwOTQxMTgzMjA0OQ.GkHWqs.akBJDgOCoTvEBaG9gQoYkejMRBegqOxJRBSNuI";
+        String token = loadSecrets().getProperty("bot.token");
         JDA jda = JDABuilder.createDefault(token)
                 .enableIntents(GatewayIntent.MESSAGE_CONTENT)
                 .addEventListeners(new MessageListener())
@@ -35,7 +42,7 @@ public class Bot {
                 .build();
         jda.awaitReady();
         jda.updateCommands().addCommands(
-                Commands.slash("vibecheck", "ну давай"),
+                Commands.slash("vibecheck", "check your vibe for today"),
                 Commands.slash("purge", "delete messages")
                         .addOption(OptionType.INTEGER, "count", "how many messages to purge", true),
                 Commands.slash("playsound", "make a sound")
@@ -51,11 +58,68 @@ public class Bot {
                 Commands.slash("skip", "skip current tracks"),
                 Commands.slash("stop", "stop the music")
         ).queue();
+
+        Map<String, PlaybackState> stateMap = PlaybackStateManager.loadStateMap();
+        for(String guildId : stateMap.keySet()) {
+            PlaybackState state = PlaybackStateManager.loadState(guildId);
+            if (state != null) {
+                System.out.println("Resuming music for guild: " + state.guildId);
+                Guild guild = jda.getGuildById(state.guildId);
+                if (guild == null) {
+                    System.out.println("Guild not found: " + state.guildId);
+                    PlaybackStateManager.clearState(state.guildId);
+                }
+                AudioManager audioManager = guild.getAudioManager();
+                VoiceChannel vc = guild.getVoiceChannelById(state.channelId);
+                if (vc == null) {
+                    System.out.println("Voice channel not found: " + state.channelId);
+                    PlaybackStateManager.clearState(state.guildId);
+                }
+                audioManager.openAudioConnection(vc);
+                AudioPlayerManager playerManager = PlayerManager.getInstance().getPlayerManager();
+                GuildMusicManager musicManager = PlayerManager.getInstance().getGuildMusicManager(guild, vc);
+                playerManager.loadItem(state.trackUrl, new AudioLoadResultHandler() {
+                    @Override
+                    public void trackLoaded(AudioTrack track) {
+                        track.setPosition(state.position);
+                        musicManager.player.playTrack(track);
+                    }
+
+                    @Override
+                    public void playlistLoaded(AudioPlaylist playlist) {
+                    }
+
+                    @Override
+                    public void noMatches() {
+                        System.out.println("No matches found for track URL: " + state.trackUrl);
+                        PlaybackStateManager.clearState(state.guildId);
+                    }
+
+                    @Override
+                    public void loadFailed(FriendlyException e) {
+                        System.out.println("Failed to load track on resume for guild " + state.guildId + ": " + e.getMessage());
+                        PlaybackStateManager.clearState(state.guildId);
+                    }
+                });
+            }
+        }
+    }
+
+    public static Properties loadSecrets() {
+        Properties secrets = new Properties();
+        try (FileInputStream fis = new FileInputStream("secrets.properties")) {
+            secrets.load(fis);
+        } catch (Exception e) {
+            System.err.println("Failed to load secrets.properties: " + e.getMessage());
+        }
+        return secrets;
     }
 
 
     public static class MessageListener extends ListenerAdapter {
+        String apiKey;
         private final AudioPlayerManager playerManager;
+        Properties secret =  loadSecrets();
 
         public MessageListener() {
             playerManager = new DefaultAudioPlayerManager();
@@ -77,17 +141,6 @@ public class Bot {
             return false;
         }
 
-        public static Properties loadSecrets() {
-            Properties secrets = new Properties();
-            try (FileInputStream fis = new FileInputStream("secrets.properties")) {
-                secrets.load(fis);
-            } catch (Exception e) {
-                System.err.println("Failed to load secrets.properties: " + e.getMessage());
-            }
-            return secrets;
-        }
-        String apiKey;
-
 
 
         @Override
@@ -105,11 +158,11 @@ public class Bot {
 
             if(content.contains(event.getJDA().getSelfUser().getAsMention())) {
                 String prompt = content.replace(event.getJDA().getSelfUser().getAsMention(), "").trim();
-                apiKey = loadSecrets().getProperty("deepseek.api");
+                apiKey = secret.getProperty("deepseek.api");
 
                 if (!prompt.isEmpty()) {
                     channel.sendTyping().queue();
-                    String reply = DeepseekAPI.getResponse(prompt, apiKey);
+                    String reply = DeepseekAPI.getResponse(prompt, apiKey, "mention");
                     if (reply != null) {
                         message.reply(reply).queue();
                     } else {
@@ -199,7 +252,7 @@ public class Bot {
                         player.playTrack(track);
                         new Thread(() -> {
                             try {
-                                Thread.sleep(track.getDuration());
+                                Thread.sleep(track.getDuration()+750);
                                 audioManager.closeAudioConnection();
                             } catch (InterruptedException e) {
                                 e.printStackTrace();
@@ -236,7 +289,7 @@ public class Bot {
                 audioManager.closeAudioConnection();
             }
             if (content.equalsIgnoreCase("give me a cat")) {
-                apiKey = loadSecrets().getProperty("cat.api");
+                apiKey = secret.getProperty("cat.api");
                 CompletableFuture.runAsync(() -> {
                     String imageUrl = CatAPI.getRandomCatImageUrl(apiKey);
 

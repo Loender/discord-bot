@@ -15,7 +15,7 @@ A Discord bot designed to enhance user interaction with features ranging from mu
 - `/purge count:<number>`: Deletes a number of recent messages in a channel.
 - `/vibecheck`: Sends a random "vibe" rating (may result in a 1-minute timeout lottery)
 - `/playsound sound:<name>`: Plays a specific local sound file in a voice channel.
-- `/weather city:<name>`: Fetches weather information using WeatherAPI.
+- `/weather city:<name>`: Fetches weather information using WeatherAPI and gives you dynamic witty responses via Deepseek API.
 - `/nasa function:<apod> [date]`: NASA API integration with optional date. Current features: `apod` - Astronomy Picture of the Day, with the description, title and the day
 - `/play url:<Soundcloud URL>`: Streams audio in a voice channel (Lavaplayer integration).
 - `/skip`: Skips the currently playing track.

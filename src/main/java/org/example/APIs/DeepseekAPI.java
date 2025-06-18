@@ -16,9 +16,12 @@ public class DeepseekAPI {
             .build();
     private static final String model = "deepseek/deepseek-chat";
 
-    public static String getResponse(String prompt, String api) {
-        prompt = "Imagine you are a human with self irony, capable of making witty remarks, answer concisely. Now answer the following: " + prompt;
-
+    public static String getResponse(String prompt, String api, String query) {
+        prompt = switch (query) {
+            case "mention" -> "Imagine you are a human with self irony, capable of making witty remarks, answer concisely. Now, reply to this: " + prompt;
+            case "weather" -> "Imagine you are a weather forecaster with self irony, capable of making witty remarks, answer concisely. Now talk about the following, as if you are currently live: " + prompt;
+            default -> "";
+        };
         JsonObject message = new JsonObject();
         message.addProperty("role", "user");
         message.addProperty("content", prompt);
@@ -35,8 +38,6 @@ public class DeepseekAPI {
                 .url("https://openrouter.ai/api/v1/chat/completions")
                 .addHeader("Authorization", "Bearer " + api)
                 .addHeader("Content-Type", "application/json")
-                .addHeader("HTTP-Referer", "https://yourapp.com") // укажи свой домен или проект
-                .addHeader("X-Title", "My Java DeepSeek App")
                 .post(RequestBody.create(
                         body.toString(), MediaType.parse("application/json")))
                 .build();

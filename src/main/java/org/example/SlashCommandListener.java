@@ -8,18 +8,15 @@ import com.sedmelluq.discord.lavaplayer.track.*;
 import net.dv8tion.jda.api.EmbedBuilder;
 import net.dv8tion.jda.api.entities.Guild;
 import net.dv8tion.jda.api.entities.User;
+import net.dv8tion.jda.api.entities.channel.middleman.AudioChannel;
 import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEvent;
-import net.dv8tion.jda.api.events.message.MessageReceivedEvent;
 import net.dv8tion.jda.api.hooks.ListenerAdapter;
 import net.dv8tion.jda.api.interactions.commands.OptionMapping;
 import net.dv8tion.jda.api.entities.channel.middleman.MessageChannel;
 
 import org.example.APIs.NasaAPI;
 import org.example.APIs.WeatherAPI;
-import org.example.music.GuildMusicManager;
-import org.example.music.LavaAudioPlayerHandler;
-import org.example.music.PlayerManager;
-import org.example.music.TrackScheduler;
+import org.example.music.*;
 
 import java.io.FileInputStream;
 import java.net.URL;
@@ -28,9 +25,11 @@ import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.CompletableFuture;
 
 public class SlashCommandListener extends ListenerAdapter {
     private final AudioPlayerManager playerManager;
+    private final Map<Long, GuildMusicManager> musicManagers = new HashMap<>();
 
     public SlashCommandListener() {
         playerManager = new DefaultAudioPlayerManager();
@@ -38,12 +37,10 @@ public class SlashCommandListener extends ListenerAdapter {
         AudioSourceManagers.registerLocalSource(playerManager);
     }
 
-    private final Map<Long, GuildMusicManager> musicManagers = new HashMap<>();
-
-    private synchronized GuildMusicManager getGuildAudioPlayer(Guild guild) {
+    private synchronized GuildMusicManager getGuildAudioPlayer(Guild guild, AudioChannel channel) {
         long guildId = guild.getIdLong();
         return musicManagers.computeIfAbsent(guildId, id -> {
-            GuildMusicManager manager = new GuildMusicManager(playerManager);
+            GuildMusicManager manager = new GuildMusicManager(playerManager, guild, channel);
             guild.getAudioManager().setSendingHandler(manager.getSendHandler());
             return manager;
         });
@@ -51,10 +48,7 @@ public class SlashCommandListener extends ListenerAdapter {
 
     private boolean isUnpleasantUser(User user) {
         String userId = user.getId();
-
-        String[] unpleasantUsers = {
-        };
-
+        String[] unpleasantUsers = {};
         for (String id : unpleasantUsers) {
             if (id.equals(userId)) {
                 return true;
@@ -62,6 +56,7 @@ public class SlashCommandListener extends ListenerAdapter {
         }
         return false;
     }
+
     public static Properties loadSecrets() {
         Properties secrets = new Properties();
         try (FileInputStream fis = new FileInputStream("secrets.properties")) {
@@ -72,7 +67,7 @@ public class SlashCommandListener extends ListenerAdapter {
         return secrets;
     }
 
-
+    Properties secret = loadSecrets();
     OptionMapping option;
     String apiKey;
 
@@ -83,11 +78,9 @@ public class SlashCommandListener extends ListenerAdapter {
             return;
         }
         switch (event.getName()) {
-
             case "purge":
                 option = event.getOption("count");
                 int amount = option.getAsInt();
-
                 if (event.getChannel() instanceof MessageChannel channel) {
                     channel.getHistory().retrievePast(amount).queue(messages -> {
                         channel.purgeMessages(messages);
@@ -105,18 +98,15 @@ public class SlashCommandListener extends ListenerAdapter {
                             "🧘‍♂️ go take a chill", "🥴 i don't think you qualify",
                             "🌈 amazing", "☠️ no that's not how we do things here", "📉 you better make up for it because it's rapidly going down"
                     };
-
                     int randomIndex = (int) (Math.random() * responses.length);
                     String vibeResult = responses[randomIndex];
-
                     event.reply(vibeResult).queue();
                     if (randomIndex == 4 && event.isFromGuild() && event.getMember() != null) {
                         try {
                             event.getMember().timeoutFor(java.time.Duration.ofMinutes(1))
                                     .queue(
                                             success -> channel.sendMessage("nice you have won the lottery and now get to have a timeout for 1 minute").queue(),
-                                            error -> channel.sendMessage("unfortunately i can't timeout you, but consider" +
-                            " yourself a winner of a 1 minute timeout").queue()
+                                            error -> channel.sendMessage("unfortunately i can't timeout you, but consider yourself a winner of a 1 minute timeout").queue()
                                     );
                         } catch (Exception e) {
                             channel.sendMessage("can't timeout you. unfortunate.").queue();
@@ -124,24 +114,21 @@ public class SlashCommandListener extends ListenerAdapter {
                     }
                 }
                 break;
-//          debug purposes, created to check specific sounds
-            case "playsound": {
+
+            case "playsound":
                 option = event.getOption("sound");
                 String sound = option.getAsString();
                 var member = event.getMember();
                 var guild = event.getGuild();
                 var vc = member.getVoiceState().getChannel();
-
                 if (vc == null) {
                     event.reply("join a voice channel for me real quick").queue();
                     return;
                 }
-
                 var audioManager = guild.getAudioManager();
                 AudioPlayer player = playerManager.createPlayer();
                 audioManager.setSendingHandler(new LavaAudioPlayerHandler(player));
                 audioManager.openAudioConnection(vc);
-
                 event.reply("one sec").queue();
                 URL resource = getClass().getClassLoader().getResource("sounds/" + sound + ".mp3");
                 String path = "";
@@ -152,7 +139,6 @@ public class SlashCommandListener extends ListenerAdapter {
                     System.out.println("sound file not found");
                 }
                 System.out.println(path);
-
                 playerManager.loadItem(path, new AudioLoadResultHandler() {
                     @Override
                     public void trackLoaded(AudioTrack track) {
@@ -166,7 +152,6 @@ public class SlashCommandListener extends ListenerAdapter {
                             }
                         }).start();
                     }
-
                     @Override public void playlistLoaded(AudioPlaylist playlist) {}
                     @Override public void noMatches() {}
                     @Override public void loadFailed(FriendlyException ex) {
@@ -174,28 +159,26 @@ public class SlashCommandListener extends ListenerAdapter {
                     }
                 });
                 break;
-            }
 
             case "weather":
                 option = event.getOption("city");
                 String city = option.getAsString();
-
-                event.deferReply().queue();
-                apiKey = loadSecrets().getProperty("weather.api");
-
-                new Thread(() -> {
-                    String weather = WeatherAPI.getWeatherInfo(city, apiKey);
-                    event.getHook().sendMessage(weather != null ? weather : "ошибка").queue();
-                }).start();
+                String apiKeyWea = secret.getProperty("weather.api");
+                String apiKeyDeep = secret.getProperty("deepseek.api");
+                event.deferReply().queue(hook -> {
+                    CompletableFuture
+                            .supplyAsync(() -> WeatherAPI.getWeatherInfo(city, apiKeyDeep, apiKeyWea))
+                            .thenAccept(weather -> {
+                                hook.sendMessage(weather != null ? weather : "could not retrieve the weather, maybe you made a typo?").queue();
+                            });
+                });
                 break;
 
-            case "nasa": {
+            case "nasa":
                 String function = event.getOption("function").getAsString();
                 String date = event.getOption("date") != null ? event.getOption("date").getAsString() : null;
-
                 event.deferReply().queue();
-                apiKey = loadSecrets().getProperty("nasa.api");
-
+                apiKey = secret.getProperty("nasa.api");
                 new Thread(() -> {
                     EmbedBuilder embed = NasaAPI.getNasaInfo(function, date, apiKey);
                     event.getHook().sendMessageEmbeds(embed != null ? embed.build() : null).queue(
@@ -204,80 +187,97 @@ public class SlashCommandListener extends ListenerAdapter {
                     );
                 }).start();
                 break;
-            }
 
             case "play":
                 String url = event.getOption("url").getAsString();
-
-                var member = event.getMember();
-                var guild = event.getGuild();
-                var vc = member.getVoiceState().getChannel();
-
+                member = event.getMember();
+                guild = event.getGuild();
+                vc = member != null ? member.getVoiceState().getChannel() : null;
                 if (vc == null) {
                     event.reply("join a voice channel first").setEphemeral(true).queue();
                     return;
                 }
-
-                var audioManager = guild.getAudioManager();
-                GuildMusicManager musicManager = getGuildAudioPlayer(event.getGuild());
+                audioManager = guild.getAudioManager();
+                GuildMusicManager musicManager = PlayerManager.getInstance().getGuildMusicManager(guild, vc);
                 TrackScheduler scheduler = musicManager.scheduler;
-                AudioPlayer player = musicManager.player;
+                player = musicManager.player;
                 player.addListener(scheduler);
-
-
                 audioManager.setSendingHandler(new LavaAudioPlayerHandler(player));
                 audioManager.openAudioConnection(vc);
-
-
-
-
                 event.reply("searching and streaming: " + url).queue();
-
                 TrackScheduler finalScheduler = scheduler;
                 playerManager.loadItem(url, new AudioLoadResultHandler() {
                     @Override
                     public void trackLoaded(AudioTrack track) {
                         finalScheduler.queue(track);
+                        try {
+                            PlaybackState state = new PlaybackState();
+                            state.guildId = guild.getId();
+                            state.channelId = vc.getId();
+                            state.trackUrl = track.getInfo().uri;
+                            state.position = 0;
+                            PlaybackStateManager.saveState(guild.getId(), state);
+                        } catch (Exception e) {
+                            System.err.println("failed to save playback state for guild " + guild.getId() + ": " + e.getMessage());
+                            e.printStackTrace();
+                        }
                     }
-
-                    @Override
-                    public void playlistLoaded(AudioPlaylist playlist) {
+                    @Override public void playlistLoaded(AudioPlaylist playlist) {
                         event.getHook().sendMessage("playlist added: " + playlist.getName()).queue();
                         for (AudioTrack track : playlist.getTracks()) {
                             finalScheduler.queue(track);
                         }
+                        if (!playlist.getTracks().isEmpty()) {
+                            try {
+                                AudioTrack firstTrack = playlist.getTracks().get(0);
+                                PlaybackState state = new PlaybackState();
+                                state.guildId = guild.getId();
+                                state.channelId = vc.getId();
+                                state.trackUrl = firstTrack.getInfo().uri;
+                                state.position = 0;
+                                PlaybackStateManager.saveState(guild.getId(), state);
+                            } catch (Exception e) {
+                                System.err.println("failed to save playback state for guild " + guild.getId() + ": " + e.getMessage());
+                                e.printStackTrace();
+                            }
+                        }
                     }
-
-                    @Override
-                    public void noMatches() {
+                    @Override public void noMatches() {
                         event.getHook().sendMessage("nothing was found with that URL").queue();
                     }
-
-                    @Override
-                    public void loadFailed(FriendlyException e) {
+                    @Override public void loadFailed(FriendlyException e) {
                         event.getHook().sendMessage("error loading track: " + e.getMessage()).queue();
                         e.printStackTrace();
                     }
                 });
                 break;
+
+            case "stop":
+                musicManager = PlayerManager.getInstance().getGuildMusicManager(event.getGuild(), null);
+                musicManager.scheduler.getQueue().clear();
+                musicManager.player.stopTrack();
+                event.getGuild().getAudioManager().closeAudioConnection();
+                PlaybackStateManager.clearState(event.getGuild().getId()); // Clear guild-specific state
+                event.reply("stopped and cleared the queue").queue();
+                break;
+
             case "skip":
-                musicManager = getGuildAudioPlayer(event.getGuild());
+                musicManager = getGuildAudioPlayer(event.getGuild(), null);
                 scheduler = musicManager.scheduler;
                 AudioTrack currentTrack = musicManager.player.getPlayingTrack();
                 if (currentTrack == null) {
                     event.reply("nothing is playing").setEphemeral(true).queue();
                     return;
                 }
-
                 event.reply("skipped **" + currentTrack.getInfo().title + "**").queue(success -> {
                     scheduler.nextTrack();
                 }, failure -> {
                     System.err.println("failed to reply to skip command: " + failure.getMessage());
                 });
                 break;
-            case "queue":
-                scheduler = getGuildAudioPlayer(event.getGuild()).scheduler;
 
+            case "queue":
+                scheduler = getGuildAudioPlayer(event.getGuild(), null).scheduler;
                 if (scheduler.getQueue().isEmpty()) {
                     event.reply("the queue is empty, want to play some music?").queue();
                 } else {
@@ -289,14 +289,6 @@ public class SlashCommandListener extends ListenerAdapter {
                     event.reply(builder.toString()).queue();
                 }
                 break;
-            case "stop":
-                GuildMusicManager stopManager = PlayerManager.getInstance().getGuildMusicManager(event.getGuild());
-                stopManager.scheduler.getQueue().clear();
-                stopManager.player.stopTrack();
-                event.getGuild().getAudioManager().closeAudioConnection();
-                event.reply("stopped and cleared the queue").queue();
-                break;
-
         }
     }
 }
