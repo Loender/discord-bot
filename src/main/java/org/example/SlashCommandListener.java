@@ -262,7 +262,7 @@ public class SlashCommandListener extends ListenerAdapter {
                 break;
 
             case "skip":
-                musicManager = getGuildAudioPlayer(event.getGuild(), null);
+                musicManager = PlayerManager.getInstance().getGuildMusicManager(event.getGuild(), null);
                 scheduler = musicManager.scheduler;
                 AudioTrack currentTrack = musicManager.player.getPlayingTrack();
                 if (currentTrack == null) {
@@ -277,17 +277,30 @@ public class SlashCommandListener extends ListenerAdapter {
                 break;
 
             case "queue":
-                scheduler = getGuildAudioPlayer(event.getGuild(), null).scheduler;
-                if (scheduler.getQueue().isEmpty()) {
-                    event.reply("the queue is empty, want to play some music?").queue();
-                } else {
-                    StringBuilder builder = new StringBuilder("queue (first 20):\n");
-                    int i = 1;
-                    for (AudioTrack trackCurrent : scheduler.getQueue().stream().limit(20).toList()) {
-                        builder.append(i++).append(". ").append(trackCurrent.getInfo().title).append("\n");
-                    }
-                    event.reply(builder.toString()).queue();
+                musicManager = PlayerManager.getInstance().getGuildMusicManager(event.getGuild(), null);
+                scheduler = musicManager.scheduler;
+                player = musicManager.player;
+                currentTrack = player.getPlayingTrack();
+                StringBuilder builder = new StringBuilder();
+
+                if (currentTrack != null) {
+                    builder.append("**Currently playing:** ").append(currentTrack.getInfo().title).append("\n");
                 }
+
+                if (scheduler.getQueue().isEmpty()) {
+                    if (currentTrack == null) {
+                        builder.append("The queue is empty, want to play some music?");
+                    } else {
+                        builder.append("No additional tracks in the queue.");
+                    }
+                } else {
+                    builder.append("**Queue (first 20):**\n");
+                    int i = 1;
+                    for (AudioTrack track : scheduler.getQueue().stream().limit(20).toList()) {
+                        builder.append(i++).append(". ").append(track.getInfo().title).append("\n");
+                    }
+                }
+                event.reply(builder.toString()).queue();
                 break;
         }
     }
