@@ -31,8 +31,8 @@ Here’s what’s planned for future versions of this bot:
 - [ ] Custom soundboard: Allow users to upload and trigger their own sound clips
 
 ### 📈 Enhancements
-- [ ] Music auto-reconnect: Resume playback after restart/crash
-- [ ] Fix audio playback
+- [x] Music auto-reconnect: Resume playback after restart/crash
+- [x] Fix audio playback
 - [ ] Configurable command prefixes and toggles (per guild)
 - [ ] Queue pagination for long music queues
 
