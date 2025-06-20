@@ -27,7 +27,7 @@ A Discord bot designed to enhance user interaction with features ranging from mu
 Here’s what’s planned for future versions of this bot:
 
 ### 🎉 New Features
-- [ ] YouTube search: Play music via search terms (no need for direct URLs)
+- [ ] Music search: Play music via search terms (no need for direct URLs)
 - [ ] Custom soundboard: Allow users to upload and trigger their own sound clips
 
 ### 📈 Enhancements
@@ -36,13 +36,13 @@ Here’s what’s planned for future versions of this bot:
 - [ ] Configurable command prefixes and toggles (per guild)
 - [ ] Queue pagination for long music queues
 
-### 🌐 Integrations
-- [ ] Add youtube integration
-
 ### 🌍 Localization
 - [ ] Multi-language support
 
 ### 👤 User Experience
 - [ ] Emoji reaction menus for music control
+- [ ] Find a 24/7 deployment option
+
+**bot will be available for public use after this roadmap is complete**
 
 ---
