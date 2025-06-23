@@ -5,7 +5,7 @@ A Discord bot designed to enhance user interaction with features ranging from mu
 ## ✨ Features
 
 ### 💬 Message Commands
-- `*bot-mention* <any message>`: Enables you to communicate with the bot via self-hosted AI Agent. You can ask the bot to do something directly without having to write commands (play music, show pictures of space or cats, and other fun features!)
+- `*bot-mention* <any message>`: Talk directly to the bot using natural language powered by a self-hosted AI Agent. No need for commands - just ask it to play music, show space or cat pictures, and other fun stuff!
 - `league of legends`: Any mention of League of Legends results in a ban. (lol)
 
 
