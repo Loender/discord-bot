@@ -5,10 +5,8 @@ A Discord bot designed to enhance user interaction with features ranging from mu
 ## ✨ Features
 
 ### 💬 Message Commands
-- `give me a cat`: Returns a random cat image (Cat API integration).
-- `*bot-mention* <any message>`: Enables you to communicate with the bot directly (DeepSeek API integration).
+- `*bot-mention* <any message>`: Enables you to communicate with the bot via self-hosted AI Agent. You can ask the bot to do something directly without having to write commands (play music, show pictures of space or cats, and other fun features!)
 - `league of legends`: Any mention of League of Legends results in a ban. (lol)
-- `go make a mess`: Urges the bot to join your voice channel, and play a random sound from local soundboard.
 
 
 ### 🛠 Slash Commands
@@ -33,6 +31,7 @@ Here’s what’s planned for future versions of this bot:
 ### 📈 Enhancements
 - [x] Music auto-reconnect: Resume playback after restart/crash
 - [x] Fix audio playback
+- [x] Implement an AI Agent
 - [ ] Configurable command prefixes and toggles (per guild)
 - [ ] Queue pagination for long music queues
 
