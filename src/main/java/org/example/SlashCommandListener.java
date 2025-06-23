@@ -284,17 +284,17 @@ public class SlashCommandListener extends ListenerAdapter {
                 StringBuilder builder = new StringBuilder();
 
                 if (currentTrack != null) {
-                    builder.append("**Currently playing:** ").append(currentTrack.getInfo().title).append("\n");
+                    builder.append("**currently playing:** ").append(currentTrack.getInfo().title).append("\n");
                 }
 
                 if (scheduler.getQueue().isEmpty()) {
                     if (currentTrack == null) {
-                        builder.append("The queue is empty, want to play some music?");
+                        builder.append("the queue is empty, want to play some music?");
                     } else {
-                        builder.append("No additional tracks in the queue.");
+                        builder.append("no additional tracks in the queue.");
                     }
                 } else {
-                    builder.append("**Queue (first 20):**\n");
+                    builder.append("**queue (first 20):**\n");
                     int i = 1;
                     for (AudioTrack track : scheduler.getQueue().stream().limit(20).toList()) {
                         builder.append(i++).append(". ").append(track.getInfo().title).append("\n");
