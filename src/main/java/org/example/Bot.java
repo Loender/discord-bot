@@ -1,10 +1,12 @@
 package org.example;
 
+import com.fasterxml.jackson.databind.JsonSerializer;
 import com.sedmelluq.discord.lavaplayer.player.*;
 import com.sedmelluq.discord.lavaplayer.source.AudioSourceManagers;
 import com.sedmelluq.discord.lavaplayer.tools.FriendlyException;
 import com.sedmelluq.discord.lavaplayer.track.AudioPlaylist;
 import com.sedmelluq.discord.lavaplayer.track.AudioTrack;
+import net.dv8tion.jda.api.EmbedBuilder;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.JDABuilder;
 import net.dv8tion.jda.api.entities.Guild;
@@ -60,7 +62,7 @@ public class Bot {
         ).queue();
 
         Map<String, PlaybackState> stateMap = PlaybackStateManager.loadStateMap();
-        for(String guildId : stateMap.keySet()) {
+        for (String guildId : stateMap.keySet()) {
             PlaybackState state = PlaybackStateManager.loadState(guildId);
             if (state != null) {
                 System.out.println("Resuming music for guild: " + state.guildId);
@@ -119,7 +121,7 @@ public class Bot {
     public static class MessageListener extends ListenerAdapter {
         String apiKey;
         private final AudioPlayerManager playerManager;
-        Properties secret =  loadSecrets();
+        Properties secret = loadSecrets();
 
         public MessageListener() {
             playerManager = new DefaultAudioPlayerManager();
@@ -142,7 +144,6 @@ public class Bot {
         }
 
 
-
         @Override
         public void onMessageReceived(MessageReceivedEvent event) {
             Message message = event.getMessage();
@@ -156,15 +157,197 @@ public class Bot {
             }
 
 
-            if(content.contains(event.getJDA().getSelfUser().getAsMention())) {
+            if (content.contains(event.getJDA().getSelfUser().getAsMention())) {
                 String prompt = content.replace(event.getJDA().getSelfUser().getAsMention(), "").trim();
-                apiKey = secret.getProperty("deepseek.api");
 
                 if (!prompt.isEmpty()) {
                     channel.sendTyping().queue();
-                    String reply = DeepseekAPI.getResponse(prompt, apiKey, "mention");
+                    AgentAPI.AgenticAiResponse reply = AgentAPI.queryDeepseek(prompt);
+
                     if (reply != null) {
-                        message.reply(reply).queue();
+                        switch (reply.intent.toLowerCase()) {
+                            case "vibe" -> {
+                                String[] responses = {
+                                        "✅ nice",
+                                        "❌ not nice brother",
+                                        "🤨 you are questionable",
+                                        "😎 shiny",
+                                        "🚫 behave",
+                                        "🧘‍♂️ go take a chill",
+                                        "🥴 i don't think you qualify",
+                                        "🌈 amazing",
+                                        "☠️ no that's not how we do things here",
+                                        "📉 you better make up for it because it's rapidly going down"
+                                };
+
+                                int randomIndex = (int) (Math.random() * responses.length);
+                                String vibeResult = responses[randomIndex];
+
+                                channel.sendMessage(vibeResult).queue();
+                                if (randomIndex == 4 && event.isFromGuild() && event.getMember() != null) {
+                                    try {
+                                        event.getMember().timeoutFor(java.time.Duration.ofMinutes(1))
+                                                .queue(
+                                                        success -> channel.sendMessage("nice you have won the lottery and now get to have a timeout for 1 minute").queue(),
+                                                        error -> channel.sendMessage("unfortunately i can't timeout you, but consider" +
+                                                                " yourself a winner of a 1 minute timeout").queue()
+                                                );
+                                    } catch (Exception e) {
+                                        channel.sendMessage("can't timeout you. unfortunate.").queue();
+                                    }
+                                }
+                            }
+                            case "sound" -> {
+                                var member = event.getMember();
+                                var guild = event.getGuild();
+                                var vc = member.getVoiceState().getChannel();
+
+                                if (vc == null) {
+                                    message.reply("join a voice channel for me real quick").queue();
+                                    return;
+                                }
+
+                                var audioManager = guild.getAudioManager();
+                                AudioPlayer player = playerManager.createPlayer();
+                                audioManager.setSendingHandler(new LavaAudioPlayerHandler(player));
+                                audioManager.openAudioConnection(vc);
+
+                                message.reply("one sec").queue();
+                                int rand = (int) (Math.random() * 4);
+                                String path = "";
+                                URL resource = getClass().getClassLoader().getResource("sounds/sound" + rand + ".mp3");
+                                if (resource != null) {
+                                    path = resource.getPath();
+                                    path = URLDecoder.decode(path, StandardCharsets.UTF_8);
+                                } else {
+                                    System.out.println("sound file not found");
+                                }
+                                System.out.println(path);
+                                playerManager.loadItem(path, new AudioLoadResultHandler() {
+                                    @Override
+                                    public void trackLoaded(AudioTrack track) {
+                                        player.playTrack(track);
+                                        new Thread(() -> {
+                                            try {
+                                                Thread.sleep(track.getDuration() + 750);
+                                                audioManager.closeAudioConnection();
+                                            } catch (InterruptedException e) {
+                                                e.printStackTrace();
+                                            }
+                                        }).start();
+                                    }
+
+                                    @Override
+                                    public void playlistLoaded(com.sedmelluq.discord.lavaplayer.track.AudioPlaylist playlist) {
+                                    }
+
+                                    @Override
+                                    public void noMatches() {
+                                    }
+
+                                    @Override
+                                    public void loadFailed(com.sedmelluq.discord.lavaplayer.tools.FriendlyException ex) {
+                                    }
+                                });
+                            }
+                            case "cat" -> {
+                                apiKey = secret.getProperty("cat.api");
+                                CompletableFuture.runAsync(() -> {
+                                    String imageUrl = CatAPI.getRandomCatImageUrl(apiKey);
+
+                                    if (imageUrl != null) {
+                                        message.reply(imageUrl).queue();
+                                    } else {
+                                        message.reply("no cat today 😿").queue();
+                                    }
+                                });
+                            }
+                            case "music" -> {
+                                String url = reply.url;
+                                var member = event.getMember();
+                                var guild = event.getGuild();
+                                var vc = member != null ? member.getVoiceState().getChannel() : null;
+                                if (vc == null) {
+                                    message.reply("join a voice channel first").queue();
+                                    return;
+                                }
+                                var audioManager = guild.getAudioManager();
+                                GuildMusicManager musicManager = PlayerManager.getInstance().getGuildMusicManager(guild, vc);
+                                TrackScheduler scheduler = musicManager.scheduler;
+                                AudioPlayer player = musicManager.player;
+                                player.addListener(scheduler);
+                                audioManager.setSendingHandler(new LavaAudioPlayerHandler(player));
+                                audioManager.openAudioConnection(vc);
+                                message.reply("searching and streaming: " + url).queue();
+                                TrackScheduler finalScheduler = scheduler;
+                                playerManager.loadItem(url, new AudioLoadResultHandler() {
+                                    @Override
+                                    public void trackLoaded(AudioTrack track) {
+                                        finalScheduler.queue(track);
+                                        try {
+                                            PlaybackState state = new PlaybackState();
+                                            state.guildId = guild.getId();
+                                            state.channelId = vc.getId();
+                                            state.trackUrl = track.getInfo().uri;
+                                            state.position = 0;
+                                            PlaybackStateManager.saveState(guild.getId(), state);
+                                        } catch (Exception e) {
+                                            System.err.println("failed to save playback state for guild " + guild.getId() + ": " + e.getMessage());
+                                            e.printStackTrace();
+                                        }
+                                    }
+
+                                    @Override
+                                    public void playlistLoaded(AudioPlaylist playlist) {
+                                        message.reply("playlist added: " + playlist.getName()).queue();
+                                        for (AudioTrack track : playlist.getTracks()) {
+                                            finalScheduler.queue(track);
+                                        }
+                                        if (!playlist.getTracks().isEmpty()) {
+                                            try {
+                                                AudioTrack firstTrack = playlist.getTracks().get(0);
+                                                PlaybackState state = new PlaybackState();
+                                                state.guildId = guild.getId();
+                                                state.channelId = vc.getId();
+                                                state.trackUrl = firstTrack.getInfo().uri;
+                                                state.position = 0;
+                                                PlaybackStateManager.saveState(guild.getId(), state);
+                                            } catch (Exception e) {
+                                                System.err.println("failed to save playback state for guild " + guild.getId() + ": " + e.getMessage());
+                                                e.printStackTrace();
+                                            }
+                                        }
+                                    }
+
+                                    @Override
+                                    public void noMatches() {
+                                        message.reply("nothing was found with that URL").queue();
+                                    }
+
+                                    @Override
+                                    public void loadFailed(FriendlyException e) {
+                                        message.reply("error loading track: " + e.getMessage()).queue();
+                                        e.printStackTrace();
+                                    }
+                                });
+                            }
+                            case "nasa" -> {
+                                String function = "apod";
+                                apiKey = secret.getProperty("nasa.api");
+                                channel.sendTyping().queue();
+
+                                new Thread(() -> {
+                                    EmbedBuilder embed = NasaAPI.getNasaInfo(function, null, apiKey);
+                                    if (embed != null) {
+                                        channel.sendMessageEmbeds(embed.build()).queue();
+                                    } else {
+                                        channel.sendMessage("something went wrong retrieving NASA data").queue();
+                                    }
+                                }).start();
+                            }
+                            default -> channel.sendMessage(reply.response).queue();
+                        }
+
                     } else {
                         message.reply("Unexpected error").queue();
                     }
@@ -175,97 +358,22 @@ public class Bot {
             }
 
             if (message.getAuthor().isBot()) return;
-                if (content.contains("league of legends")) {
-                    if (event.isFromGuild()) {
-                        try {
-                            event.getGuild().ban(event.getMember(), 0, TimeUnit.SECONDS)
-                                    .reason("go think about how you behave")
-                                    .queue();
-                        } catch (Exception e) {
-                            message.reply("if only you were not higher than me you would be banned I swear").queue();
-                        }
-                    } else {
-                        channel.sendMessage("don't use that word pls").queue();
+            if (content.contains("league of legends")) {
+                if (event.isFromGuild()) {
+                    try {
+                        event.getGuild().ban(event.getMember(), 0, TimeUnit.SECONDS)
+                                .reason("go think about how you behave")
+                                .queue();
+                    } catch (Exception e) {
+                        message.reply("if only you were not higher than me you would be banned I swear").queue();
                     }
-                }
-                if (content.equalsIgnoreCase("!vibecheck")) {
-                    String[] responses = {
-                            "✅ nice",
-                            "❌ not nice brother",
-                            "🤨 you are questionable",
-                            "😎 shiny",
-                            "🚫 behave",
-                            "🧘‍♂️ go take a chill",
-                            "🥴 i don't think you qualify",
-                            "🌈 amazing",
-                            "☠️ no that's not how we do things here",
-                            "📉 you better make up for it because it's rapidly going down"
-                    };
-
-                    int randomIndex = (int) (Math.random() * responses.length);
-                    String vibeResult = responses[randomIndex];
-
-                    channel.sendMessage(vibeResult).queue();
-                    if (randomIndex == 4 && event.isFromGuild() && event.getMember() != null)  {
-                        try {
-                            event.getMember().timeoutFor(java.time.Duration.ofMinutes(1))
-                                    .queue(
-                                            success -> channel.sendMessage("nice you have won the lottery and now get to have a timeout for 1 minute").queue(),
-                                            error -> channel.sendMessage("unfortunately i can't timeout you, but consider" +
-                                                    " yourself a winner of a 1 minute timeout").queue()
-                                    );
-                        } catch (Exception e) {
-                            channel.sendMessage("can't timeout you. unfortunate.").queue();
-                        }
-                    }
-                }
-
-            if (content.equalsIgnoreCase("go make a mess")){
-                var member = event.getMember();
-                var guild = event.getGuild();
-                var vc = member.getVoiceState().getChannel();
-
-                if (vc == null) {
-                    message.reply("join a voice channel for me real quick").queue();
-                    return;
-                }
-
-                var audioManager = guild.getAudioManager();
-                AudioPlayer player = playerManager.createPlayer();
-                audioManager.setSendingHandler(new LavaAudioPlayerHandler(player));
-                audioManager.openAudioConnection(vc);
-
-                message.reply("one sec").queue();
-                int rand = (int) (Math.random()*4);
-                String path = "";
-                URL resource = getClass().getClassLoader().getResource("sounds/sound" + rand + ".mp3");
-                if (resource != null) {
-                    path = resource.getPath();
-                    path = URLDecoder.decode(path, StandardCharsets.UTF_8);
                 } else {
-                    System.out.println("sound file not found");
+                    channel.sendMessage("don't use that word pls").queue();
                 }
-                System.out.println(path);
-                playerManager.loadItem(path, new AudioLoadResultHandler() {
-                    @Override
-                    public void trackLoaded(AudioTrack track) {
-                        player.playTrack(track);
-                        new Thread(() -> {
-                            try {
-                                Thread.sleep(track.getDuration()+750);
-                                audioManager.closeAudioConnection();
-                            } catch (InterruptedException e) {
-                                e.printStackTrace();
-                            }
-                        }).start();
-                    }
-
-                    @Override public void playlistLoaded(com.sedmelluq.discord.lavaplayer.track.AudioPlaylist playlist) {}
-                    @Override public void noMatches() {}
-                    @Override public void loadFailed(com.sedmelluq.discord.lavaplayer.tools.FriendlyException ex) {}
-                });
             }
-            if (content.equalsIgnoreCase("feeling lonely")){
+
+
+            if (content.equalsIgnoreCase("feeling lonely")) {
                 var member = event.getMember();
                 var guild = event.getGuild();
                 var vc = member.getVoiceState().getChannel();
@@ -278,7 +386,7 @@ public class Bot {
                 var audioManager = guild.getAudioManager();
                 audioManager.openAudioConnection(vc);
             }
-            if (content.equalsIgnoreCase("go away")){
+            if (content.equalsIgnoreCase("go away")) {
                 var guild = event.getGuild();
                 var audioManager = guild.getAudioManager();
                 if (!audioManager.isConnected()) {
@@ -287,19 +395,6 @@ public class Bot {
                 }
                 message.reply(":sob:").queue();
                 audioManager.closeAudioConnection();
-            }
-            if (content.equalsIgnoreCase("give me a cat")) {
-                apiKey = secret.getProperty("cat.api");
-                CompletableFuture.runAsync(() -> {
-                    String imageUrl = CatAPI.getRandomCatImageUrl(apiKey);
-
-                if (imageUrl != null) {
-                    message.reply(imageUrl).queue();
-                }
-                else {
-                    message.reply("no cat today 😿").queue();
-                }
-                });
             }
             if (content.equalsIgnoreCase("show me your picture")) {
                 message.reply("<:lev:1381705639599931624>").queue();
